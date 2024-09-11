@@ -33,7 +33,7 @@ app.use(express.json());
 const signUpRouter = require("./routes/signUpRoute.js");
 const loginRouter = require("./routes/loginRoute.js");
 const statusRouter = require("./routes/statusRoute.js");
-const profileRouter = require("./routes/ProfileRoute.js");
+const profileRouter = require("./routes/profileRoute.js");
 const requestRouter = require("./routes/requestRoute.js");
 const chatsRouter = require("./routes/chatsRoute.js");
 const chatRouter = require("./routes/chatRoute.js");

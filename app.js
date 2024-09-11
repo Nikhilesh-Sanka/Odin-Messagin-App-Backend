@@ -1,9 +1,8 @@
 const express = require("express");
-const { createServer } = require("https");
+const { createServer } = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const jsw = require("jsonwebtoken");
-const queries = require("./queries/queries.js");
 
 require("dotenv").config();
 

@@ -11,7 +11,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:5173", "http://localhost:5174"],
+    origin: "*",
   },
   connectionStateRecovery: {
     maxDisconnectionDuration: 2 * 60 * 1000,
@@ -20,11 +20,7 @@ const io = new Server(httpServer, {
 });
 
 /* enabling cors for the api */
-app.use(
-  cors({
-    origin: ["http://localhost:5173", "http://localhost:5174"],
-  })
-);
+app.use(cors());
 
 /* processing the json data coming from the request */
 app.use(express.json());

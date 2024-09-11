@@ -72,6 +72,7 @@ app.use("/user/searchPeople", searchPeopleRouter);
 
 /* handling the server errors */
 app.use((err, req, res, next) => {
+  console.log(err);
   res.sendStatus(500);
 });
 

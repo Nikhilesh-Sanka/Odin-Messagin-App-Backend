@@ -35,6 +35,11 @@ const chatsRouter = require("./routes/chatsRoute.js");
 const chatRouter = require("./routes/chatRoute.js");
 const searchPeopleRouter = require("./routes/searchPeopleRoute.js");
 
+/* testing the server */
+app.get("/", (req, res) => {
+  res.send("server is working fine");
+});
+
 /* signing up and login routes */
 app.use("/sign-up", signUpRouter);
 app.use("/login", loginRouter);

@@ -65,6 +65,11 @@ app.use("/user/chats", chatsRouter);
 app.use("/user/chat", chatRouter);
 app.use("/user/searchPeople", searchPeopleRouter);
 
+/* handling the server errors */
+app.use((err, req, res, next) => {
+  res.sendStatus(500);
+});
+
 /******************************************************* SOCKET **********************************************************/
 io.on("connection", (socket) => {
   socket.on("join-chat", (room) => {

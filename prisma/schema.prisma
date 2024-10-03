@@ -21,10 +21,14 @@ model User {
   password String
   profile Profile?
   chats Chat[]
+  createdGroupChats GroupChat[] @relation("owner")
+  adminRoledGroupChats GroupChat[] @relation("admin")
+  memberRoledGroupChats GroupChat[] @relation("member")
   sentRequests Request[] @relation("sentRequests")
   receivedRequests Request[] @relation("receivedRequests")
   status String @default("offline")
   messages Message[]
+  groupChatMessages GroupChatMessage[]
 }
 
 model Request {
@@ -44,6 +48,16 @@ model Profile {
   userId String @unique
 }
 
+model GroupChat {
+  id String @id @default (uuid())
+  name String @default("new group chat")
+  owner User @relation("owner",fields:[ownerId],references:[id])
+  ownerId String
+  admins User[] @relation("admin")
+  members User[]  @relation("member")
+  messages GroupChatMessage[]
+}
+
 model Chat {
   id String @id @default(uuid())
   users User[]
@@ -59,3 +73,14 @@ model Message {
   chat Chat @relation(fields:[chatId],references:[id])
   chatId String
 }
+
+model GroupChatMessage {
+  id String @id @default(uuid())
+  text String
+  time String
+  user User @relation(fields:[userId],references:[id])
+  userId String
+  groupChat GroupChat @relation(fields:[groupChatId],references:[id])
+  groupChatId String
+}
+

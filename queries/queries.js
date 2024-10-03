@@ -1,6 +1,9 @@
 const { PrismaClient } = require("@prisma/client");
+const jwt = require("jsonwebtoken");
 
 const prisma = new PrismaClient();
+
+require("dotenv").config();
 
 // user queries
 const addUser = async (username, password, firstName, lastName) => {
@@ -316,6 +319,408 @@ const createMessage = async (userId, chatId, text) => {
   });
 };
 
+// group chats related queries
+const getGroupChats = async (userId) => {
+  const result = await prisma.groupChat.findMany({
+    where: {
+      OR: [
+        {
+          ownerId: userId,
+        },
+        {
+          admins: {
+            some: {
+              id: userId,
+            },
+          },
+        },
+        {
+          members: {
+            some: {
+              id: userId,
+            },
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+  return result;
+};
+
+const createGroupChat = async (userId) => {
+  const result = await prisma.groupChat.create({
+    data: {
+      ownerId: userId,
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+  return result;
+};
+
+// individual group chat related queries
+const getGroupChat = async (userId, groupId) => {
+  const result = await prisma.groupChat.findUnique({
+    where: {
+      id: groupId,
+    },
+    select: {
+      id: true,
+      name: true,
+      ownerId: true,
+      messages: {
+        select: {
+          id: true,
+          text: true,
+          time: true,
+          user: {
+            select: {
+              id: true,
+              username: true,
+              createdGroupChats: {
+                where: {
+                  id: groupId,
+                },
+                select: {
+                  id: true,
+                },
+              },
+              adminRoledGroupChats: {
+                where: {
+                  id: groupId,
+                },
+                select: {
+                  id: true,
+                },
+              },
+              memberRoledGroupChats: {
+                where: {
+                  id: groupId,
+                },
+                select: {
+                  id: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      admins: {
+        where: {
+          id: userId,
+        },
+        select: {
+          id: true,
+        },
+      },
+      members: {
+        where: {
+          id: userId,
+        },
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
+  return result;
+};
+
+const changeGroupName = async (newName, groupId, userId) => {
+  await prisma.groupChat.update({
+    where: {
+      id: groupId,
+      OR: [
+        {
+          ownerId: userId,
+        },
+        {
+          admins: {
+            some: {
+              id: userId,
+            },
+          },
+        },
+      ],
+    },
+    data: {
+      name: newName,
+    },
+  });
+};
+
+const deleteGroup = async (groupId, userId) => {
+  await prisma.groupChatMessage.deleteMany({
+    where: {
+      groupChatId: groupId,
+      groupChat: {
+        ownerId: userId,
+      },
+    },
+  });
+  await prisma.groupChat.delete({
+    where: {
+      id: groupId,
+      ownerId: userId,
+    },
+  });
+};
+
+const getUsersToAdd = async (groupId, userId) => {
+  const users = await prisma.user.findMany({
+    where: {
+      NOT: {
+        OR: [
+          {
+            id: userId,
+          },
+          {
+            createdGroupChats: {
+              some: {
+                id: groupId,
+              },
+            },
+          },
+          {
+            adminRoledGroupChats: {
+              some: {
+                id: groupId,
+              },
+            },
+          },
+          {
+            memberRoledGroupChats: {
+              some: {
+                id: groupId,
+              },
+            },
+          },
+        ],
+      },
+      chats: {
+        some: {
+          users: {
+            some: {
+              id: userId,
+            },
+          },
+        },
+      },
+    },
+    select: {
+      id: true,
+      username: true,
+      profile: {
+        select: {
+          image: true,
+        },
+      },
+    },
+  });
+  return users;
+};
+
+const getMembers = async (groupId) => {
+  const result = await prisma.groupChat.findUnique({
+    where: {
+      id: groupId,
+    },
+    select: {
+      owner: {
+        select: {
+          id: true,
+          username: true,
+          profile: {
+            select: {
+              image: true,
+            },
+          },
+        },
+      },
+      admins: {
+        select: {
+          id: true,
+          username: true,
+          profile: {
+            select: {
+              image: true,
+            },
+          },
+        },
+      },
+      members: {
+        select: {
+          id: true,
+          username: true,
+          profile: {
+            select: {
+              image: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  return result;
+};
+
+const addMembers = async (groupId, usersToAdd) => {
+  const users = usersToAdd.map((userId) => {
+    return { id: userId };
+  });
+  await prisma.groupChat.update({
+    where: {
+      id: groupId,
+    },
+    data: {
+      members: {
+        connect: users,
+      },
+    },
+  });
+};
+
+const removeMember = async (groupId, removedMember, userId) => {
+  await prisma.groupChat.update({
+    where: {
+      id: groupId,
+      OR: [
+        {
+          owner: {
+            id: userId,
+          },
+        },
+        {
+          admins: {
+            some: {
+              id: userId,
+            },
+          },
+        },
+      ],
+    },
+    data: {
+      admins: {
+        disconnect: {
+          id: removedMember,
+        },
+      },
+      members: {
+        disconnect: {
+          id: removedMember,
+        },
+      },
+    },
+  });
+};
+
+const makeAdmin = async (groupId, memberId, userId) => {
+  await prisma.groupChat.update({
+    where: {
+      id: groupId,
+      OR: [
+        {
+          admins: {
+            some: {
+              id: userId,
+            },
+          },
+        },
+        {
+          ownerId: userId,
+        },
+      ],
+      NOT: {
+        admins: {
+          some: {
+            id: memberId,
+          },
+        },
+      },
+      members: {
+        some: {
+          id: memberId,
+        },
+      },
+    },
+    data: {
+      admins: {
+        connect: {
+          id: memberId,
+        },
+      },
+      members: {
+        disconnect: {
+          id: memberId,
+        },
+      },
+    },
+  });
+};
+
+const suspendAdmin = async (groupId, memberId, userId) => {
+  await prisma.groupChat.update({
+    where: {
+      id: groupId,
+      OR: [
+        {
+          admins: {
+            some: {
+              id: userId,
+            },
+          },
+        },
+        {
+          ownerId: userId,
+        },
+      ],
+      admins: {
+        some: {
+          id: memberId,
+        },
+      },
+      NOT: {
+        members: {
+          some: {
+            id: memberId,
+          },
+        },
+      },
+    },
+    data: {
+      admins: {
+        disconnect: {
+          id: memberId,
+        },
+      },
+      members: {
+        connect: {
+          id: memberId,
+        },
+      },
+    },
+  });
+};
+
+const createGroupMessage = async (groupId, userId, text) => {
+  const date = new Date();
+  const dateString = `${date.getDate()}/${date.getMonth()}/${date.getFullYear()} ${date.getHours()}:${date.getMinutes()}`;
+  await prisma.groupChatMessage.create({
+    data: {
+      text: text,
+      userId: userId,
+      groupChatId: groupId,
+      time: dateString,
+    },
+  });
+};
+
 module.exports = {
   addUser,
   getProfile,
@@ -331,4 +736,16 @@ module.exports = {
   browsePeople,
   getChat,
   createMessage,
+  getGroupChats,
+  createGroupChat,
+  getGroupChat,
+  changeGroupName,
+  deleteGroup,
+  getUsersToAdd,
+  getMembers,
+  addMembers,
+  removeMember,
+  makeAdmin,
+  suspendAdmin,
+  createGroupMessage,
 };

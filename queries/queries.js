@@ -281,6 +281,11 @@ const getChat = async (chatId, userId) => {
   const result = await prisma.chat.findUnique({
     where: {
       id: chatId,
+      users: {
+        some: {
+          id: userId,
+        },
+      },
     },
     include: {
       users: {
@@ -291,11 +296,23 @@ const getChat = async (chatId, userId) => {
           id: true,
           username: true,
           profile: true,
+          notifications: true,
         },
       },
       messages: true,
     },
   });
+
+  // updating the notifications of the user
+  await prisma.chatNotification.deleteMany({
+    where: {
+      chatId: chatId,
+      notification: {
+        userId: userId,
+      },
+    },
+  });
+
   return {
     id: result.id,
     messages: result.messages,
@@ -306,7 +323,13 @@ const getChat = async (chatId, userId) => {
   };
 };
 
-const createMessage = async (userId, chatId, text) => {
+const createMessage = async (
+  userId,
+  chatId,
+  text,
+  receiverId,
+  isOtherUserConnected
+) => {
   const date = new Date();
   const dateString = `${date.getDate()}/${date.getMonth()}/${date.getFullYear()} ${date.getHours()}:${date.getMinutes()}`;
   await prisma.message.create({
@@ -317,6 +340,37 @@ const createMessage = async (userId, chatId, text) => {
       time: dateString,
     },
   });
+  if (!isOtherUserConnected) {
+    const result = await prisma.chatNotification.updateMany({
+      where: {
+        chatId: chatId,
+        notification: {
+          userId: receiverId,
+        },
+      },
+      data: {
+        numOfMessages: {
+          increment: 1,
+        },
+      },
+    });
+    if (result.count === 0) {
+      await prisma.chatNotification.create({
+        data: {
+          chat: {
+            connect: {
+              id: chatId,
+            },
+          },
+          notification: {
+            connect: {
+              userId: receiverId,
+            },
+          },
+        },
+      });
+    }
+  }
 };
 
 // group chats related queries
@@ -429,6 +483,17 @@ const getGroupChat = async (userId, groupId) => {
       },
     },
   });
+
+  // updating the notifications of the user
+  await prisma.groupChatNotification.deleteMany({
+    where: {
+      groupChatId: groupId,
+      notification: {
+        userId: userId,
+      },
+    },
+  });
+
   return result;
 };
 
@@ -708,7 +773,7 @@ const suspendAdmin = async (groupId, memberId, userId) => {
   });
 };
 
-const createGroupMessage = async (groupId, userId, text) => {
+const createGroupMessage = async (groupId, userId, text, connectedUsers) => {
   const date = new Date();
   const dateString = `${date.getDate()}/${date.getMonth()}/${date.getFullYear()} ${date.getHours()}:${date.getMinutes()}`;
   await prisma.groupChatMessage.create({
@@ -719,6 +784,130 @@ const createGroupMessage = async (groupId, userId, text) => {
       time: dateString,
     },
   });
+
+  // updating the notifications of the not connected users
+  await prisma.groupChatNotification.updateMany({
+    where: {
+      NOT: {
+        notification: {
+          OR: connectedUsers,
+        },
+      },
+      notification: {
+        user: {
+          OR: [
+            {
+              createdGroupChats: {
+                some: {
+                  id: groupId,
+                },
+              },
+            },
+            {
+              memberRoledGroupChats: {
+                some: {
+                  id: groupId,
+                },
+              },
+            },
+            {
+              adminRoledGroupChats: {
+                some: {
+                  id: groupId,
+                },
+              },
+            },
+          ],
+        },
+      },
+      groupChatId: groupId,
+    },
+    data: {
+      numOfMessages: {
+        increment: 1,
+      },
+    },
+  });
+  const result = await prisma.notifications.findMany({
+    where: {
+      user: {
+        OR: [
+          {
+            createdGroupChats: {
+              some: {
+                id: groupId,
+              },
+            },
+          },
+          {
+            memberRoledGroupChats: {
+              some: {
+                id: groupId,
+              },
+            },
+          },
+          {
+            adminRoledGroupChats: {
+              some: {
+                id: groupId,
+              },
+            },
+          },
+        ],
+      },
+      NOT: {
+        OR: [
+          {
+            OR: connectedUsers,
+          },
+          {
+            groupChats: {
+              some: {
+                groupChatId: groupId,
+              },
+            },
+          },
+        ],
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+  for (let notification of result) {
+    await prisma.groupChatNotification.create({
+      data: {
+        notificationId: notification.id,
+        groupChatId: groupId,
+      },
+    });
+  }
+};
+
+const getGroupMembers = async (groupId) => {
+  const result = await prisma.groupChat.findUnique({
+    where: {
+      id: groupId,
+    },
+    select: {
+      owner: {
+        select: {
+          id: true,
+        },
+      },
+      members: {
+        select: {
+          id: true,
+        },
+      },
+      admins: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
+  return [result.owner, ...result.members, ...result.admins];
 };
 
 module.exports = {
@@ -748,4 +937,5 @@ module.exports = {
   makeAdmin,
   suspendAdmin,
   createGroupMessage,
+  getGroupMembers,
 };

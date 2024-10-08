@@ -18,6 +18,15 @@ const addUser = async (username, password, firstName, lastName) => {
       },
     },
   });
+  await prisma.notifications.create({
+    data: {
+      user: {
+        connect: {
+          id: user.id,
+        },
+      },
+    },
+  });
   return user.id;
 };
 

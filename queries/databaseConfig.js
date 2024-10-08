@@ -3,14 +3,14 @@ const prisma = new PrismaClient();
 
 async function addNotificationObjects() {
   console.log("adding notifications objects");
-  const result = await prisma.user.findFirst({
+  const users = await prisma.user.findMany({
     select: {
       notifications: true,
+      id: true,
     },
   });
-  if (!result.notifications) {
-    const users = await prisma.user.findMany({});
-    for (let user of users) {
+  for (let user of users) {
+    if (user.notifications === null) {
       await prisma.notifications.create({
         data: {
           user: {
